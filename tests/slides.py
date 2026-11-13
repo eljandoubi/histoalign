@@ -4,7 +4,9 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pandas as pd
 import tifffile
+from PIL import Image
 from scipy import sparse
 
 SAMPLE = "V1_Fake_Section_1"
@@ -64,3 +66,37 @@ def write_slide(root, seed=0):
     image = np.stack([xs % 256, ys % 256, np.full_like(xs, 128)], axis=-1).astype(np.uint8)
     tifffile.imwrite(root / f"{root.name}_image.tif", image)
     return FakeSlide(root, counts)
+
+
+def write_her2st(root, sections=("A1", "A2", "B1"), seed=0):
+    """Sections in the layout of the unpacked HER2ST archives, 3 x 3 spots each.
+
+    Each selection file also lists a spot that is not under the tissue and a selected spot that
+    has no counts. Returns the counts of every section, spots x genes.
+    """
+    rng = np.random.default_rng(seed)
+    out = {}
+    for name in sections:
+        grid = [(10 + c, 20 + r) for r in range(GRID) for c in range(GRID)]
+        ids = [f"{x}x{y}" for x, y in grid]
+        counts = pd.DataFrame(rng.poisson(3.0, (len(ids), len(GENES))), ids, GENES)
+        (root / "count-matrices").mkdir(parents=True, exist_ok=True)
+        counts.to_csv(root / "count-matrices" / f"{name}.tsv.gz", sep="\t")
+        out[name] = counts
+
+        rows = [
+            (x, y, x + 0.1, y - 0.1, FIRST + PITCH * (x - 10), FIRST + PITCH * (y - 20), 1)
+            for x, y in grid
+        ]
+        rows += [(40, 40, 40.0, 40.0, 20.0, 20.0, 0), (41, 41, 41.0, 41.0, 880.0, 880.0, 1)]
+        columns = ["x", "y", "new_x", "new_y", "pixel_x", "pixel_y", "selected"]
+        (root / "spot-selections").mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(rows, columns=columns).to_csv(
+            root / "spot-selections" / f"{name}_selection.tsv.gz", sep="\t", index=False
+        )
+
+        ys, xs = np.mgrid[0:IMAGE_SIDE, 0:IMAGE_SIDE]
+        image = np.stack([xs % 256, ys % 256, np.full_like(xs, 128)], axis=-1).astype(np.uint8)
+        (root / "images" / "HE").mkdir(parents=True, exist_ok=True)
+        Image.fromarray(image).save(root / "images" / "HE" / f"{name}.jpg", quality=95)
+    return out
