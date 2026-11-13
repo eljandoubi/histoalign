@@ -23,6 +23,54 @@ Three reference points are computed on the same split: kNN on the raw image feat
 regression on the same features, and the aligned model trained on shuffled pairs, which should
 score close to zero.
 
+## Results
+
+Pearson correlation between predicted and measured expression on the test spots, default settings,
+mean and standard deviation over three seeds. The two baselines have no seed and give the same score
+every time.
+
+| split | method | all genes | top 50 genes | per spot |
+|---|---|---|---|---|
+| `a1_block` | aligned space, kNN | 0.135 ± 0.004 | 0.119 ± 0.005 | 0.141 ± 0.006 |
+|  | raw features, kNN | 0.148 | 0.154 | 0.163 |
+|  | raw features, ridge | 0.135 | 0.132 | 0.167 |
+|  | control: aligned space, shuffled pairs | 0.021 ± 0.010 | 0.038 ± 0.036 | 0.021 ± 0.011 |
+| `a1_to_a2` | aligned space, kNN | 0.140 ± 0.005 | 0.221 ± 0.008 | 0.170 ± 0.007 |
+|  | raw features, kNN | 0.138 | 0.210 | 0.174 |
+|  | raw features, ridge | 0.137 | 0.196 | 0.145 |
+|  | control: aligned space, shuffled pairs | -0.006 ± 0.006 | -0.001 ± 0.003 | -0.012 ± 0.006 |
+| `a2_to_a1` | aligned space, kNN | 0.134 ± 0.013 | 0.164 ± 0.025 | 0.173 ± 0.009 |
+|  | raw features, kNN | 0.159 | 0.172 | 0.183 |
+|  | raw features, ridge | 0.134 | 0.122 | 0.143 |
+|  | control: aligned space, shuffled pairs | -0.013 ± 0.007 | -0.035 ± 0.007 | -0.008 ± 0.016 |
+
+Retrieval: for each test image, the rank of its own spot among all test spots by similarity in the
+aligned space. In brackets, what a random ranking gives.
+
+| split | recall@10 | near recall@10 | median rank |
+|---|---|---|---|
+| `a1_block` | 0.054 ± 0.001 (0.022) | 0.278 ± 0.014 (0.167) | 172 (382) |
+| `a1_to_a2` | 0.029 ± 0.003 (0.003) | 0.180 ± 0.014 (0.029) | 416 (1999) |
+| `a2_to_a1` | 0.019 ± 0.007 (0.003) | 0.135 ± 0.024 (0.031) | 634 (1938) |
+
+What the numbers say:
+
+- The control sits near zero. Trained on shuffled pairs, with the same genes, split and scoring, the
+  aligned space scores between -0.035 and 0.038: the scores above come from the pairing of image and
+  expression.
+- From section 1 to section 2 (`a1_to_a2`) the aligned space does about as well as the raw features:
+  0.140 against 0.138 (kNN) and 0.137 (ridge) over all genes, 0.221 against 0.210 and 0.196 over the
+  50 most variable genes. Per spot it is a little lower than the raw kNN (0.170 against 0.174). The
+  gaps are about as large as the spread over seeds (0.005).
+- In the other direction (`a2_to_a1`) and on the strip of one section (`a1_block`), the kNN on the
+  raw features is better over all genes: 0.159 against 0.134 and 0.148 against 0.135.
+- The three variants (neighbour mask, input dropout, sigmoid loss) do not help: against the default,
+  the score over all genes changes by -0.034 at worst and 0.000 at best. Their tables are in
+  `results/tables.md`.
+- So the contrastive step does not predict expression better than a kNN on the features it starts
+  from. It does build a shared space: across sections the right spot is among the ten closest for
+  2.9% of the images in one direction and 1.9% in the other, where a random ranking gives 0.3%.
+
 ## Data
 
 Two sections of one 10x Genomics Visium human breast cancer sample (fresh frozen, whole
