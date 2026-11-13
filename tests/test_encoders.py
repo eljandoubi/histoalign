@@ -1,13 +1,16 @@
 import numpy as np
 import pytest
+import torch
 from transformers import ViTConfig, ViTModel
 
 from histoalign.encoders import (
     MEAN,
     STD,
+    ClsToken,
     FrozenEncoder,
     embed_batches,
     load_features,
+    lunit_vit_small,
     save_features,
     to_tensor,
 )
@@ -31,7 +34,7 @@ def patches(n, seed=0):
 
 @pytest.fixture
 def encoder():
-    return FrozenEncoder(model=tiny_vit(), device="cpu")
+    return FrozenEncoder(ClsToken(tiny_vit()), "tiny", image_size=32, device="cpu")
 
 
 def test_white_patch_after_normalisation():
@@ -68,3 +71,10 @@ def test_cache_round_trip(tmp_path):
     assert got_barcodes == barcodes
     assert np.array_equal(got, emb)
     assert attrs["encoder"] == "tiny" and attrs["patch_px"] == 32
+
+
+def test_lunit_trunk_gives_one_vector_per_image():
+    model = lunit_vit_small().eval()
+    with torch.no_grad():
+        out = model(torch.zeros(2, 3, 224, 224))
+    assert out.shape == (2, 384)

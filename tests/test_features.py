@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from transformers import ViTConfig, ViTModel
 
-from histoalign.encoders import FrozenEncoder, load_features
+from histoalign.encoders import ClsToken, FrozenEncoder, load_features
 from histoalign.features import extract, spot_table
 from histoalign.visium import read_slide
 from tests.slides import GRID
@@ -17,7 +17,8 @@ def tiny_encoder():
         num_attention_heads=2,
         intermediate_size=32,
     )
-    return FrozenEncoder(name="tiny", model=ViTModel(cfg, add_pooling_layer=False), device="cpu")
+    vit = ViTModel(cfg, add_pooling_layer=False)
+    return FrozenEncoder(ClsToken(vit), "tiny", image_size=32, device="cpu")
 
 
 def test_spot_table_columns(fake_slide):
