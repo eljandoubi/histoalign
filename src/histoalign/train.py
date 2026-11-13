@@ -24,6 +24,7 @@ class Config:
     temperature: float = 0.07
     learn_temperature: bool = True
     neighbour_radius: float = 0.0  # in spot pitches, 0 keeps every other spot as a negative
+    patience: int = 10  # epochs without a better validation loss before training stops
     seed: int = 0
 
 
@@ -67,14 +68,25 @@ def spatial_block_split(
     return ~(held | buffer), held
 
 
+def _loss(model: TwoTower, a: torch.Tensor, e: torch.Tensor, cfg: Config, ignore):
+    if cfg.loss == "infonce":
+        return info_nce(a, e, model.scale, ignore)
+    return sigmoid_loss(a, e, model.scale, model.bias, ignore)
+
+
 def train(
     pairs: Pairs,
     cfg: Config,
     radius_px: float = 0.0,
     device: str | None = None,
     log=print,
-) -> tuple[TwoTower, list[float]]:
-    """Fit the two heads. Returns the model in eval mode and the mean loss of each epoch."""
+    val: Pairs | None = None,
+) -> tuple[TwoTower, dict]:
+    """Fit the two heads. Returns the model in eval mode and a dict with the loss of each epoch.
+
+    With `val` the loss on those spots is computed after every epoch, training stops when it has
+    not improved for `cfg.patience` epochs, and the weights of the best epoch are put back.
+    """
     if cfg.loss not in ("infonce", "sigmoid"):
         raise ValueError(f"unknown loss {cfg.loss!r}")
     device = torch.device(device or pick_device())
@@ -110,7 +122,16 @@ def train(
     coords = torch.from_numpy(pairs.coords.astype(np.float32)).to(device)
     slide = torch.from_numpy(pairs.slide).to(device)
 
-    history = []
+    if val is not None:
+        v_image = torch.from_numpy(val.image).to(device)
+        v_expr = torch.from_numpy(val.expr).to(device)
+        v_ignore = None
+        if radius_px > 0:
+            v_coords = torch.from_numpy(val.coords.astype(np.float32)).to(device)
+            v_ignore = neighbour_mask(v_coords, torch.from_numpy(val.slide).to(device), radius_px)
+
+    history, val_history = [], []
+    best, best_epoch, best_state = float("inf"), 0, None
     for epoch in range(cfg.epochs):
         model.train()
         order = rng.permutation(len(pairs))
@@ -119,20 +140,33 @@ def train(
             idx = torch.from_numpy(order[b * batch_size : (b + 1) * batch_size]).to(device)
             a, e = model(image[idx], expr[idx])
             ignore = neighbour_mask(coords[idx], slide[idx], radius_px) if radius_px > 0 else None
-            if cfg.loss == "infonce":
-                loss = info_nce(a, e, model.scale, ignore)
-            else:
-                loss = sigmoid_loss(a, e, model.scale, model.bias, ignore)
+            loss = _loss(model, a, e, cfg, ignore)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
             sched.step()
             running += loss.item()
         history.append(running / steps_per_epoch)
+        line = f"epoch {epoch + 1}/{cfg.epochs} loss {history[-1]:.4f}"
+        if val is not None:
+            model.eval()
+            with torch.no_grad():
+                a, e = model(v_image, v_expr)
+                val_history.append(_loss(model, a, e, cfg, v_ignore).item())
+            line += f" val {val_history[-1]:.4f}"
+            if val_history[-1] < best - 1e-4:
+                best, best_epoch = val_history[-1], epoch + 1
+                best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+            elif epoch + 1 - best_epoch >= cfg.patience:
+                if log:
+                    log(line + " (stopped)")
+                break
         if log and (epoch + 1) % 10 == 0:
-            scale = model.scale.item()
-            log(f"epoch {epoch + 1}/{cfg.epochs} loss {history[-1]:.4f} scale {scale:.1f}")
-    return model.eval(), history
+            log(line)
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    info = {"loss": history, "val_loss": val_history, "best_epoch": best_epoch or len(history)}
+    return model.eval(), info
 
 
 @torch.no_grad()

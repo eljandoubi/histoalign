@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch
 
+from histoalign.losses import info_nce
 from histoalign.retrieval import recall_at_k
 from histoalign.train import Config, Pairs, encode, neighbour_mask, spatial_block_split, train
 
@@ -32,9 +33,10 @@ def held_out_recall(model, pairs, k=5):
 
 
 def test_training_pairs_up_spots_it_never_saw():
-    model, history = train(make_pairs(600, 0), FAST, device="cpu", log=None)
-    assert len(history) == FAST.epochs
-    assert history[-1] < history[0]
+    model, info = train(make_pairs(600, 0), FAST, device="cpu", log=None)
+    assert len(info["loss"]) == FAST.epochs
+    assert info["loss"][-1] < info["loss"][0]
+    assert info["best_epoch"] == FAST.epochs and info["val_loss"] == []
     # 200 candidates, so chance for recall@5 is 2.5 percent
     assert held_out_recall(model, make_pairs(200, 1)) > 0.4
 
@@ -58,8 +60,8 @@ def test_sigmoid_loss_also_learns():
 def test_training_with_neighbour_masking_runs():
     pairs = make_pairs(400, 5)
     pairs.coords[:] = np.random.default_rng(0).uniform(0, 300, size=(400, 2))  # all close together
-    model, history = train(pairs, FAST, radius_px=100.0, device="cpu", log=None)
-    assert np.isfinite(history).all()
+    model, info = train(pairs, FAST, radius_px=100.0, device="cpu", log=None)
+    assert np.isfinite(info["loss"]).all()
     assert held_out_recall(model, make_pairs(200, 6), k=10) > 0.2
 
 
@@ -69,13 +71,40 @@ def test_unknown_loss_is_refused():
 
 
 def test_batch_larger_than_the_data_is_shrunk():
-    model, history = train(
+    model, info = train(
         make_pairs(40, 8),
         Config(out_dim=4, hidden=8, epochs=2, batch_size=256),
         device="cpu",
         log=None,
     )
-    assert len(history) == 2
+    assert len(info["loss"]) == 2
+
+
+def test_validation_stops_training_and_puts_back_the_best_epoch():
+    # few pairs and a lot of noise: the heads learn the training spots by heart
+    cfg = Config(
+        out_dim=16, hidden=128, epochs=150, batch_size=30, lr=5e-3, dropout=0.0, patience=5
+    )
+    val = make_pairs(200, 10, noise=1.5)
+    model, info = train(make_pairs(60, 9, noise=1.5), cfg, device="cpu", log=None, val=val)
+    assert len(info["loss"]) < cfg.epochs
+    assert len(info["val_loss"]) == len(info["loss"])
+    assert info["best_epoch"] == int(np.argmin(info["val_loss"])) + 1
+    # what comes back is the model of that epoch, not the last one
+    a, e = encode(model, val.image, val.expr)
+    back = info_nce(torch.from_numpy(a), torch.from_numpy(e), model.scale.detach()).item()
+    assert back == pytest.approx(min(info["val_loss"]), abs=1e-4)
+    assert back < info["val_loss"][-1]
+
+
+def test_validation_with_neighbour_masking():
+    pairs = make_pairs(300, 11)
+    val = make_pairs(100, 12)
+    pairs.coords[:] = val.coords[:1]  # everything on one point, so everything is a neighbour
+    val.coords[:] = val.coords[:1]
+    cfg = Config(out_dim=8, hidden=16, epochs=6, batch_size=64, patience=2)
+    _, info = train(pairs, cfg, radius_px=10.0, device="cpu", log=None, val=val)
+    assert np.isfinite(info["val_loss"]).all()
 
 
 def test_neighbour_mask_is_same_slide_and_close():

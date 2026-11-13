@@ -1,7 +1,7 @@
 """One experiment: fit on some spots, score on others."""
 
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import anndata as ad
@@ -77,11 +77,15 @@ def run(
     markers: tuple[str, ...] = MARKERS,
     k: int = 50,
     control: bool = True,
+    val_frac: float = 0.15,
+    val_gap: float = 2.0,
     log=print,
 ) -> dict:
     """Fit on `train_sets`, score on `test_set`.
 
-    The gene list and the scaling come from the training spots only. Besides the aligned model
+    The gene list and the scaling come from the training spots only. A strip of `val_frac` of
+    each training slide, with `val_gap` spot pitches around it left out, is held back to pick
+    the number of epochs; the test spots are never used for a choice. Besides the aligned model
     the result holds three reference points on the same split: kNN on the raw image features,
     ridge regression on them, and the aligned model trained on shuffled pairs.
     """
@@ -107,7 +111,11 @@ def run(
     pitch = float(np.mean([p.pitch_px for p, _ in train_sets]))
     radius_px = cfg.neighbour_radius * pitch
 
-    model, history = train(pairs, cfg, radius_px=radius_px, log=log)
+    fit, val = pairs, None
+    if val_frac > 0:
+        keep, held = spatial_block_split(pairs.coords, pairs.slide, val_frac, val_gap * pitch)
+        fit, val = pairs.take(keep), pairs.take(held)
+    model, info = train(fit, cfg, radius_px=radius_px, log=log, val=val)
     img_test, expr_test = encode(model, test_image, truth)
     _, expr_train = encode(model, pairs.image, pairs.expr)
 
@@ -124,13 +132,11 @@ def run(
         "ridge": score(ridge_impute(pairs.image, pairs.expr, test_image), truth, genes, markers),
     }
     if control:
-        shuffled = Pairs(
-            pairs.image,
-            pairs.expr[np.random.default_rng(cfg.seed).permutation(len(pairs))],
-            pairs.coords,
-            pairs.slide,
-        )
-        model_c, _ = train(shuffled, cfg, radius_px=radius_px, log=None)
+        order = np.random.default_rng(cfg.seed).permutation(len(pairs))
+        shuffled = Pairs(pairs.image, pairs.expr[order], pairs.coords, pairs.slide)
+        fixed = replace(cfg, epochs=info["best_epoch"])
+        fit_c = shuffled.take(keep) if val is not None else shuffled
+        model_c, _ = train(fit_c, fixed, radius_px=radius_px, log=None)
         img_c, _ = encode(model_c, test_image, truth)
         _, expr_c = encode(model_c, shuffled.image, shuffled.expr)
         imputation["aligned_knn_shuffled_pairs"] = score(
@@ -139,10 +145,16 @@ def run(
 
     return {
         "config": asdict(cfg),
-        "train": {"slides": [p.name for p, _ in train_sets], "spots": len(pairs)},
+        "train": {
+            "slides": [p.name for p, _ in train_sets],
+            "spots": len(pairs),
+            "fit_spots": len(fit),
+            "val_spots": 0 if val is None else len(val),
+        },
         "test": {"slide": test_p.name, "spots": len(test_idx)},
         "genes": genes,
-        "final_loss": history[-1],
+        "epochs": info["best_epoch"],
+        "final_loss": info["loss"][-1],
         "retrieval": {
             "image_to_expr": _recalls(sim, test_coords, near),
             "expr_to_image": _recalls(sim.T, test_coords, near),

@@ -32,6 +32,7 @@ CONFIG_FLAGS = {
     "loss": str,
     "temperature": float,
     "neighbour_radius": float,
+    "patience": int,
     "seed": int,
 }
 
@@ -107,7 +108,13 @@ def cmd_run(args) -> None:
         test = prepare(raw / args.test, feats)
         test_set = (test, np.arange(len(test.coords)))
     result = run(
-        train_sets, test_set, cfg, n_genes=args.genes, k=args.k, control=not args.no_control
+        train_sets,
+        test_set,
+        cfg,
+        n_genes=args.genes,
+        k=args.k,
+        control=not args.no_control,
+        val_frac=args.val_frac,
     )
     print(summary(result))
     if args.out:
@@ -149,6 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--genes", type=int, default=1000)
     p.add_argument("--k", type=int, default=50)
+    p.add_argument("--val-frac", type=float, default=0.15, help="strip of training used to stop")
     p.add_argument("--no-control", action="store_true", help="skip the shuffled pairs control")
     p.add_argument("--out", help="write the full result as json")
     for name, kind in CONFIG_FLAGS.items():

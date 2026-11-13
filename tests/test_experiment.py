@@ -57,7 +57,8 @@ def test_result_describes_the_split():
     out = run(
         [everything(p) for p in train], everything(test), FAST, n_genes=30, control=False, log=None
     )
-    assert out["train"] == {"slides": ["a"], "spots": 300}
+    assert out["train"]["slides"] == ["a"] and out["train"]["spots"] == 300
+    assert 0 < out["train"]["val_spots"] < out["train"]["fit_spots"]
     assert out["test"] == {"slide": "b", "spots": 150}
     assert "aligned_knn_shuffled_pairs" not in out["imputation"]
     assert len(out["genes"]) == 30
@@ -121,3 +122,40 @@ def test_prepare_reads_slide_and_features(fake_slide):
     save_features(out_dir / f"{SAMPLE}.h5", list(slide.adata.obs_names)[::-1], feats)
     with pytest.raises(ValueError):
         prepare(fake_slide.root, out_dir)
+
+
+def test_validation_strip_picks_the_epochs_and_stays_out_of_the_fit():
+    train = [synthetic_slide("a", 11), synthetic_slide("b", 12)]
+    test = synthetic_slide("c", 13, n=100)
+    cfg = Config(out_dim=16, hidden=64, epochs=80, batch_size=64, lr=3e-3, dropout=0.0, patience=4)
+    out = run(
+        [everything(p) for p in train],
+        everything(test),
+        cfg,
+        n_genes=40,
+        control=False,
+        val_frac=0.2,
+        log=None,
+    )
+    seen = out["train"]
+    assert seen["val_spots"] > 0.15 * seen["spots"]
+    # the spots between the strip and the rest are in neither set
+    assert seen["fit_spots"] + seen["val_spots"] < seen["spots"]
+    assert 1 <= out["epochs"] <= 80
+
+
+def test_no_validation_when_the_strip_is_zero():
+    train = [synthetic_slide("a", 14)]
+    test = synthetic_slide("b", 15, n=100)
+    out = run(
+        [everything(p) for p in train],
+        everything(test),
+        FAST,
+        n_genes=30,
+        val_frac=0,
+        log=None,
+    )
+    assert out["train"]["val_spots"] == 0 and out["train"]["fit_spots"] == 300
+    assert out["epochs"] == FAST.epochs
+    # the control still runs, on all the spots
+    assert "aligned_knn_shuffled_pairs" in out["imputation"]
