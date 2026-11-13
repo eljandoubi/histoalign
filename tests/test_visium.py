@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -42,3 +44,9 @@ def test_positions_file_with_header(fake_slide):
     slide = read_slide(fake_slide.root)
     assert slide.adata.obsm["spatial"].shape == (GRID * GRID, 2)
     assert slide.adata.obs["array_col"].tolist()[:3] == [0, 1, 2]
+
+
+def test_a_slide_can_carry_its_own_spot_size(fake_slide):
+    slide = replace(read_slide(fake_slide.root), spot_diameter_um=100.0, spot_pitch_um=200.0)
+    assert slide.mpp == pytest.approx(100.0 / SPOT_DIAMETER)
+    assert slide.pitch_px == pytest.approx(200.0 / slide.mpp)

@@ -22,16 +22,18 @@ class Slide:
     image_path: Path | None
     hires_path: Path | None
     hires_scale: float
+    spot_diameter_um: float = SPOT_DIAMETER_UM
+    spot_pitch_um: float = SPOT_PITCH_UM
 
     @property
     def mpp(self) -> float:
         """Microns per pixel of the full resolution image."""
-        return SPOT_DIAMETER_UM / self.spot_diameter_px
+        return self.spot_diameter_um / self.spot_diameter_px
 
     @property
     def pitch_px(self) -> float:
         """Distance between two neighbouring spot centres, in full resolution pixels."""
-        return SPOT_PITCH_UM / self.mpp
+        return self.spot_pitch_um / self.mpp
 
 
 def read_positions(spatial_dir: Path) -> pd.DataFrame:
