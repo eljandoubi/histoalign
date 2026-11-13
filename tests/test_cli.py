@@ -7,7 +7,9 @@ import pytest
 from histoalign import cli
 from histoalign.encoders import save_features
 from histoalign.visium import read_slide
-from tests.slides import write_slide
+from tests.slides import write_her2st, write_slide
+from tests.test_features import tiny_encoder
+from tests.test_her2st import make_archives
 
 
 def make_server(tmp_path, sample="V1_Fake_Section_1"):
@@ -79,3 +81,57 @@ def test_run_end_to_end_on_tiny_slides(tmp_path, capsys):
     assert result["test"]["slide"] == "S3" and result["train"]["slides"] == ["S1", "S2"]
     assert result["config"]["epochs"] == 2
     assert isinstance(result["code"], str) and result["code"]
+
+
+def embedded_her2st(tmp_path, monkeypatch, names=("A1", "A2", "B1", "B2", "C1")):
+    raw = tmp_path / "her2st"
+    write_her2st(raw, names)
+    monkeypatch.setattr(cli, "load_encoder", lambda name, device: tiny_encoder())
+    cli.main(["features", "--her2st", str(raw), "--out", str(tmp_path / "feat")])
+    return raw, tmp_path / "feat"
+
+
+def test_features_embeds_every_her2st_section(tmp_path, monkeypatch):
+    _, feats = embedded_her2st(tmp_path, monkeypatch)
+    assert sorted(p.stem for p in feats.glob("*.h5")) == ["A1", "A2", "B1", "B2", "C1"]
+
+
+def test_features_embeds_only_the_sections_named(tmp_path, monkeypatch):
+    raw = tmp_path / "her2st"
+    write_her2st(raw)
+    monkeypatch.setattr(cli, "load_encoder", lambda name, device: tiny_encoder())
+    cli.main(["features", "A2", "--her2st", str(raw), "--out", str(tmp_path / "feat")])
+    assert [p.stem for p in (tmp_path / "feat").glob("*.h5")] == ["A2"]
+
+
+def test_features_without_slides_is_refused():
+    with pytest.raises(SystemExit):
+        cli.main(["features"])
+
+
+def test_leave_one_patient_out_end_to_end(tmp_path, monkeypatch):
+    raw, feats = embedded_her2st(tmp_path, monkeypatch)
+    out = tmp_path / "fold.json"
+    cli.main(
+        ["run", "--her2st", str(raw), "--features", str(feats), "--leave-out", "A"]
+        + ["--genes", "8", "--k", "3", "--epochs", "2", "--hidden", "8", "--out-dim", "4"]
+        + ["--val-frac", "0", "--out", str(out)]
+    )
+    result = json.loads(out.read_text())
+    assert result["train"]["slides"] == ["B1", "B2", "C1"]
+    assert result["test"] == {"slide": "patient A", "spots": 18}
+
+
+def test_leave_out_needs_her2st_and_a_patient_that_exists(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit):
+        cli.main(["run", "--leave-out", "A"])
+    raw, feats = embedded_her2st(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit):
+        cli.main(["run", "--her2st", str(raw), "--features", str(feats), "--leave-out", "Z"])
+
+
+def test_unpack_command(tmp_path, capsys):
+    make_archives(tmp_path / "zips")
+    cli.main(["unpack", str(tmp_path / "zips"), "--out", str(tmp_path / "raw")])
+    assert (tmp_path / "raw" / "images" / "HE" / "A1.jpg").exists()
+    assert str(tmp_path / "raw") in capsys.readouterr().out
