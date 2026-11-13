@@ -78,3 +78,4 @@ def test_run_end_to_end_on_tiny_slides(tmp_path, capsys):
     result = json.loads(out.read_text())
     assert result["test"]["slide"] == "S3" and result["train"]["slides"] == ["S1", "S2"]
     assert result["config"]["epochs"] == 2
+    assert isinstance(result["code"], str) and result["code"]

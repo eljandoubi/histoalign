@@ -3,6 +3,7 @@
 import argparse
 import json
 import shutil
+import subprocess
 import tarfile
 import urllib.request
 from pathlib import Path
@@ -65,6 +66,29 @@ def download(sample: str, out: Path, image: bool = True) -> Path:
     return root
 
 
+def code_version() -> str:
+    """Short hash of the commit the code is at, marked +dirty if src has uncommitted changes."""
+    here = Path(__file__).resolve().parent
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=here,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        changed = subprocess.run(
+            ["git", "status", "--porcelain", "--", str(here)],
+            cwd=here,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return head + ("+dirty" if changed else "")
+
+
 def summary(result: dict) -> str:
     lines = [
         f"train {result['train']['slides']} ({result['train']['spots']} spots), "
@@ -118,6 +142,7 @@ def cmd_run(args) -> None:
         val_frac=args.val_frac,
     )
     print(summary(result))
+    result["code"] = code_version()
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(result, indent=1))
