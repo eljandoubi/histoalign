@@ -4,6 +4,8 @@ import pytest
 import pyzipper
 
 from histoalign import her2st
+from histoalign.encoders import save_features
+from histoalign.experiment import prepare_slide
 from tests.slides import FIRST, GENES, GRID, PITCH, write_her2st
 
 
@@ -55,6 +57,15 @@ def test_pixel_size_comes_from_the_spacing_of_the_spots(raw):
     assert slide.mpp == pytest.approx(200.0 / PITCH)
     assert slide.spot_diameter_px == pytest.approx(PITCH / 2)
     assert slide.image_path == raw / "images" / "HE" / "A1.jpg" and slide.hires_path is None
+
+
+def test_a_section_is_prepared_like_a_visium_slide(raw, tmp_path):
+    slide = her2st.read_section(raw, "A1")
+    feats = np.arange(slide.adata.n_obs * 4, dtype=np.float32).reshape(-1, 4)
+    save_features(tmp_path / "A1.h5", list(slide.adata.obs_names), feats)
+    p = prepare_slide(slide, tmp_path)
+    assert p.name == "A1" and p.image.shape == (GRID * GRID, 4)
+    assert p.pitch_px == pytest.approx(slide.pitch_px)
 
 
 def make_archives(folder):

@@ -12,11 +12,12 @@ from histoalign.genes import Scaler, log_normalise, select_genes
 from histoalign.predict import knn_impute, ridge_impute, score
 from histoalign.retrieval import median_rank, near_recall_at_k, recall_at_k
 from histoalign.train import Config, Pairs, encode, spatial_block_split, train
-from histoalign.visium import read_slide
+from histoalign.visium import Slide, read_slide
 
 # genes with a known pattern in breast tumours, kept whatever the variance filter says
 MARKERS = ("ERBB2", "ESR1", "PGR", "MKI67", "KRT8", "KRT18", "EPCAM", "COL1A1", "CD74", "MS4A1")
 KS = (1, 5, 10)
+FAR = 1e7  # pixels between two pooled slides, much more than any slide is wide
 
 
 @dataclass
@@ -34,7 +35,10 @@ Subset = tuple[Prepared, np.ndarray]  # a slide and the indices of the spots tha
 
 
 def prepare(raw_dir: str | Path, feature_dir: str | Path) -> Prepared:
-    slide = read_slide(raw_dir)
+    return prepare_slide(read_slide(raw_dir), feature_dir)
+
+
+def prepare_slide(slide: Slide, feature_dir: str | Path) -> Prepared:
     barcodes, image, _ = load_features(Path(feature_dir) / f"{slide.sample_id}.h5")
     if barcodes != list(slide.adata.obs_names):
         raise ValueError(f"{slide.sample_id}: cached features are not in the order of the spots")
@@ -44,6 +48,23 @@ def prepare(raw_dir: str | Path, feature_dir: str | Path) -> Prepared:
         image,
         slide.adata.obsm["spatial"],
         slide.pitch_px,
+    )
+
+
+def pool(parts: list[Prepared], name: str | None = None) -> Prepared:
+    """Several slides as one, to score all the sections of a patient together.
+
+    Each slide is moved far away from the others in x, so that no spot counts as a neighbour of
+    a spot of another slide. A gene that a slide lacks is zero in its spots.
+    """
+    adata = ad.concat({p.name: p.adata for p in parts}, join="outer", index_unique="-")
+    coords = np.vstack([p.coords + [i * FAR, 0.0] for i, p in enumerate(parts)])
+    return Prepared(
+        name or "+".join(p.name for p in parts),
+        adata,
+        np.vstack([p.image for p in parts]),
+        coords,
+        float(np.mean([p.pitch_px for p in parts])),
     )
 
 

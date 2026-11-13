@@ -4,7 +4,7 @@ import pytest
 from scipy import sparse
 
 from histoalign.encoders import save_features
-from histoalign.experiment import Prepared, block_subsets, prepare, run
+from histoalign.experiment import Prepared, block_subsets, pool, prepare, run
 from histoalign.genes import log_normalise
 from histoalign.train import Config
 from tests.slides import SAMPLE
@@ -159,3 +159,29 @@ def test_no_validation_when_the_strip_is_zero():
     assert out["epochs"] == FAST.epochs
     # the control still runs, on all the spots
     assert "aligned_knn_shuffled_pairs" in out["imputation"]
+
+
+def test_pooled_slides_keep_their_spots_apart():
+    a, b = synthetic_slide("a", 20, n=50), synthetic_slide("b", 21, n=40)
+    b.adata.obs_names = a.adata.obs_names[:40]
+    both = pool([a, b])
+    assert both.name == "a+b" and both.adata.n_obs == 90
+    assert both.adata.obs_names.is_unique
+    assert np.array_equal(both.image[50:], b.image)
+    assert np.array_equal(both.coords[:50], a.coords)
+    apart = np.linalg.norm(both.coords[:50, None] - both.coords[None, 50:], axis=2).min()
+    assert apart > 1000 * PITCH
+
+
+def test_pooling_fills_a_missing_gene_with_zeros():
+    a, b = synthetic_slide("a", 22, n=30), synthetic_slide("b", 23, n=30)
+    b.adata = b.adata[:, 1:].copy()
+    g0 = pool([a, b]).adata[:, "G0"].X.toarray().ravel()
+    assert (g0[:30] > 0).any() and (g0[30:] == 0).all()
+
+
+def test_a_pooled_test_set_is_scored_like_one_slide():
+    train = [synthetic_slide("a", 24)]
+    test = pool([synthetic_slide("b", 25, n=60), synthetic_slide("c", 26, n=70)], "patient X")
+    out = run([everything(p) for p in train], everything(test), FAST, n_genes=30, log=None)
+    assert out["test"] == {"slide": "patient X", "spots": 130}
