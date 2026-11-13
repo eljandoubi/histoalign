@@ -15,6 +15,7 @@ dependencies = [
     "scanpy>=1.10",
     "tifffile>=2024.2",
     "torch>=2.3",
+    "transformers>=4.44",
 ]
 
 [dependency-groups]
