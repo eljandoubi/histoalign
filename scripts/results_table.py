@@ -1,6 +1,6 @@
 """Print the results folder as markdown: mean and spread over seeds, one table per split.
 
-uv run python scripts/results_table.py results
+uv run python scripts/results_table.py results [variant ...]
 """
 
 import json
@@ -29,9 +29,12 @@ def fmt(values: list[float]) -> str:
     return f"{np.mean(values):.3f} ± {np.std(values):.3f}"
 
 
-def table(runs: dict[str, dict[str, list[dict]]]) -> str:
+def table(runs: dict[str, dict[str, list[dict]]], only: list[str] | None = None) -> str:
     out = []
     for split, variants in runs.items():
+        variants = {name: r for name, r in variants.items() if not only or name in only}
+        if not variants:
+            continue
         first = next(iter(variants.values()))[0]
         out.append(f"### {split}: {first['train']['slides']} to {first['test']['slide']}")
         out.append(
@@ -67,4 +70,5 @@ def table(runs: dict[str, dict[str, list[dict]]]) -> str:
 
 
 if __name__ == "__main__":
-    print(table(load(Path(sys.argv[1] if len(sys.argv) > 1 else "results"))))
+    folder = Path(sys.argv[1] if len(sys.argv) > 1 else "results")
+    print(table(load(folder), sys.argv[2:]))
