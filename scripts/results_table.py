@@ -36,7 +36,9 @@ def table(runs: dict[str, dict[str, list[dict]]], only: list[str] | None = None)
         if not variants:
             continue
         first = next(iter(variants.values()))[0]
-        out.append(f"### {split}: {first['train']['slides']} to {first['test']['slide']}")
+        slides = first["train"]["slides"]
+        train = slides if len(slides) <= 3 else f"{len(slides)} slides"
+        out.append(f"### {split}: {train} to {first['test']['slide']}")
         out.append(
             f"train {first['train']['spots']} spots, test {first['test']['spots']} spots, "
             f"{len(first['genes'])} genes. Mean and standard deviation over seeds.\n"
