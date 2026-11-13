@@ -16,6 +16,7 @@ class Config:
     out_dim: int = 256
     hidden: int = 512
     dropout: float = 0.1
+    input_dropout: float = 0.0
     lr: float = 1e-3
     weight_decay: float = 1e-2
     epochs: int = 60
@@ -101,6 +102,7 @@ def train(
         dropout=cfg.dropout,
         temperature=cfg.temperature,
         learn_temperature=cfg.learn_temperature,
+        input_dropout=cfg.input_dropout,
     ).to(device)
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=cfg.lr, weight_decay=cfg.weight_decay)

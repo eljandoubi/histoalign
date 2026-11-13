@@ -10,13 +10,22 @@ from torch import nn
 class Head(nn.Module):
     """LayerNorm, one hidden layer, then a linear map into the shared space.
 
-    Outputs have unit norm.
+    `input_dropout` switches off a share of the input features, which is a cheap regulariser for
+    noisy vectors such as the expression of one spot. Outputs have unit norm.
     """
 
-    def __init__(self, in_dim: int, out_dim: int = 256, hidden: int = 512, dropout: float = 0.1):
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int = 256,
+        hidden: int = 512,
+        dropout: float = 0.1,
+        input_dropout: float = 0.0,
+    ):
         super().__init__()
         self.net = nn.Sequential(
             nn.LayerNorm(in_dim),
+            nn.Dropout(input_dropout),
             nn.Linear(in_dim, hidden),
             nn.GELU(),
             nn.Dropout(dropout),
@@ -43,10 +52,11 @@ class TwoTower(nn.Module):
         dropout: float = 0.1,
         temperature: float = 0.07,
         learn_temperature: bool = True,
+        input_dropout: float = 0.0,
     ):
         super().__init__()
-        self.image = Head(image_dim, out_dim, hidden, dropout)
-        self.expr = Head(expr_dim, out_dim, hidden, dropout)
+        self.image = Head(image_dim, out_dim, hidden, dropout, input_dropout)
+        self.expr = Head(expr_dim, out_dim, hidden, dropout, input_dropout)
         self.log_scale = nn.Parameter(torch.tensor(math.log(1 / temperature)))
         self.bias = nn.Parameter(torch.tensor(-10.0))
         self.log_scale.requires_grad_(learn_temperature)

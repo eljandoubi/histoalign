@@ -25,6 +25,7 @@ CONFIG_FLAGS = {
     "out_dim": int,
     "hidden": int,
     "dropout": float,
+    "input_dropout": float,
     "lr": float,
     "weight_decay": float,
     "epochs": int,

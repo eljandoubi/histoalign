@@ -12,6 +12,15 @@ def test_head_outputs_unit_vectors():
     assert torch.allclose(out.norm(dim=-1), torch.ones(5), atol=1e-5)
 
 
+def test_input_dropout_only_acts_in_training():
+    head = Head(32, out_dim=16, hidden=24, dropout=0.0, input_dropout=0.5)
+    x = torch.randn(5, 32)
+    head.train()
+    assert not torch.allclose(head(x), head(x))
+    head.eval()
+    assert torch.allclose(head(x), head(x))
+
+
 def test_towers_share_the_output_size_only():
     model = TwoTower(image_dim=40, expr_dim=70, out_dim=16, hidden=32)
     img, expr = model(torch.randn(4, 40), torch.randn(4, 70))
