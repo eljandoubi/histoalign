@@ -69,6 +69,32 @@ def table(runs: dict[str, dict[str, list[dict]]], only: list[str] | None = None)
     return "\n".join(out)
 
 
+def across_splits(runs: dict[str, dict[str, list[dict]]], variant: str = "default") -> str:
+    """One row per method: the score of each split (a mean over its seeds), then their mean and
+    standard deviation over the splits, for instance over the held out patients."""
+    scores: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    splits = [s for s, variants in runs.items() if variant in variants]
+    for split in splits:
+        results = runs[split][variant]
+        for method in METHODS:
+            if method in results[0]["imputation"]:
+                for key, _ in SCORES:
+                    values = [r["imputation"][method][key] for r in results]
+                    scores[method][key].append(float(np.mean(values)))
+    header = ["method"] + [label for _, label in SCORES]
+    out = [f"### {variant}: mean and standard deviation over {len(splits)} splits", ""]
+    out.append("| " + " | ".join(header) + " |")
+    out.append("|" + "---|" * len(header))
+    for method, by_key in scores.items():
+        out.append(f"| {method} | " + " | ".join(fmt(by_key[key]) for key, _ in SCORES) + " |")
+    return "\n".join(out) + "\n"
+
+
 if __name__ == "__main__":
-    folder = Path(sys.argv[1] if len(sys.argv) > 1 else "results")
-    print(table(load(folder), sys.argv[2:]))
+    args = [a for a in sys.argv[1:] if a != "--across"]
+    folder = Path(args[0] if args else "results")
+    runs = load(folder)
+    if "--across" in sys.argv[1:]:
+        print(across_splits(runs, *args[1:2]))
+    else:
+        print(table(runs, args[1:]))
