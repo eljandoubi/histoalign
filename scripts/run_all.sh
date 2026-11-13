@@ -1,5 +1,5 @@
 #!/bin/sh
-# The runs behind results/: three splits, a few variants, three seeds each. About half an hour on a laptop.
+# The runs behind results/: three splits, a few variants, three seeds each. About an hour on a laptop.
 # Features must be cached first:  histoalign features data/raw/<sample> ... --out data/features/lunit
 set -e
 A1=V1_Breast_Cancer_Block_A_Section_1
