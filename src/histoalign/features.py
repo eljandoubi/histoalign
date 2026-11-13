@@ -43,14 +43,17 @@ def extract(
     """Embed the patch around every spot and write <sample>.h5 and <sample>.parquet in out_dir.
 
     With `hires` the small PNG that Space Ranger writes is used instead of the full resolution
-    TIFF. It is quick, but a patch then holds far fewer real pixels.
+    TIFF. It is quick, but a patch then holds far fewer real pixels. Any other image file (the
+    JPEGs of the HER2ST sections) is read whole.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     if hires:
-        image = SlideImage.from_png(slide.hires_path, slide.hires_scale)
+        image, source = SlideImage.from_png(slide.hires_path, slide.hires_scale), "hires"
+    elif slide.image_path.suffix.lower() in (".tif", ".tiff"):
+        image, source = SlideImage.from_tiff(slide.image_path), "tiff"
     else:
-        image = SlideImage.from_tiff(slide.image_path)
+        image, source = SlideImage.from_image(slide.image_path), "image"
 
     spots = spot_table(slide)
     centres = slide.adata.obsm["spatial"]
@@ -65,7 +68,7 @@ def extract(
         encoder=encoder.name,
         patch_px=encoder.image_size,
         mpp=slide.mpp,
-        source="hires" if hires else "tiff",
+        source=source,
     )
     spots.to_parquet(out_dir / f"{slide.sample_id}.parquet", index=False)
     return out_dir / f"{slide.sample_id}.h5"

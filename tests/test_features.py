@@ -1,5 +1,8 @@
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
+from PIL import Image
 from transformers import ViTConfig, ViTModel
 
 from histoalign.encoders import ClsToken, FrozenEncoder, load_features
@@ -40,6 +43,15 @@ def test_extract_writes_features_and_table(fake_slide, tmp_path):
 
     table = pd.read_parquet(path.with_suffix(".parquet"))
     assert table["barcode"].tolist() == barcodes
+
+
+def test_extract_reads_a_jpeg(fake_slide, tmp_path):
+    slide = read_slide(fake_slide.root)
+    jpg = tmp_path / "image.jpg"
+    Image.open(slide.image_path).convert("RGB").save(jpg, quality=95)
+    path = extract(replace(slide, image_path=jpg), tiny_encoder(), tmp_path / "feat", batch_size=4)
+    _, emb, attrs = load_features(path)
+    assert emb.shape == (GRID * GRID, 16) and attrs["source"] == "image"
 
 
 def test_different_spots_get_different_features(fake_slide, tmp_path):

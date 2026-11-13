@@ -36,6 +36,12 @@ class SlideImage:
     def from_png(cls, path: str | Path, scale: float) -> "SlideImage":
         return cls(np.asarray(Image.open(path).convert("RGB")), scale)
 
+    @classmethod
+    def from_image(cls, path: str | Path) -> "SlideImage":
+        """A JPEG or PNG at full resolution, read whole into memory."""
+        with Image.open(path) as img:
+            return cls(np.asarray(img.convert("RGB")))
+
     def crop(self, x: float, y: float, side: int) -> np.ndarray:
         """`side` x `side` pixels around (x, y). What falls outside the image is white."""
         cx, cy = int(round(x * self.scale)), int(round(y * self.scale))

@@ -1,4 +1,5 @@
 import numpy as np
+from PIL import Image
 
 from histoalign.patches import OUT_PX, SlideImage, crop_side, extract_patches
 from histoalign.visium import read_slide
@@ -52,3 +53,13 @@ def test_patches_have_the_encoder_size(fake_slide):
     patches = list(extract_patches(image, slide.adata.obsm["spatial"], slide.mpp))
     assert len(patches) == GRID * GRID
     assert all(p.shape == (OUT_PX, OUT_PX, 3) and p.dtype == np.uint8 for p in patches)
+
+
+def test_png_and_jpeg_are_read_whole(tmp_path):
+    pixels = np.random.default_rng(0).integers(0, 255, size=(40, 30, 3), dtype=np.uint8)
+    Image.fromarray(pixels).save(tmp_path / "a.png")
+    Image.fromarray(pixels).save(tmp_path / "a.jpg", quality=95)
+    png = SlideImage.from_image(tmp_path / "a.png")
+    jpg = SlideImage.from_image(tmp_path / "a.jpg")
+    assert np.array_equal(png.pixels, pixels)
+    assert jpg.pixels.shape == pixels.shape and jpg.scale == 1.0
