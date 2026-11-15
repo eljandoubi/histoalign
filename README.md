@@ -14,9 +14,10 @@ control, and the way the data is split is written down.
    resolution H&E.
 2. `histoalign features` cuts a 224 px patch at 0.5 microns per pixel around every spot, runs a
    frozen ViT and caches the vectors in HDF5, with the spot table in Parquet.
-3. `histoalign run` picks genes and fits the scaling on the training spots only, trains the two
-   heads (InfoNCE or the SigLIP sigmoid loss, with an option to leave neighbouring spots out of
-   the negatives), chooses the number of epochs on a held-out strip of the training slides, then
+3. `histoalign run` picks genes and fits the scaling on the training spots (the test slide is read
+   only for the names of its genes, see "How the test spots are kept out"), trains the two heads
+   (InfoNCE or the SigLIP sigmoid loss, with an option to leave neighbouring spots out of the
+   negatives), chooses the number of epochs on a held-out strip of the training slides, then
    scores the test spots.
 
 Three reference points are computed on the same split: kNN on the raw image features, ridge
@@ -170,12 +171,16 @@ training spots.
 
 ## How the test spots are kept out
 
-Nothing about the test spots is used to choose genes, to fit the scaling, to pick the number of
-epochs or to set a hyperparameter. The genes are the 1,000 most variable ones of the training
-spots (plus ten breast cancer markers when every slide has them), the scaling is the training
-mean and standard deviation, and the epochs come from the loss on a strip at the edge of the
-training slide with two spot pitches left out around it. The other settings are the defaults of
-`histoalign run`; the variants in the tables are reported for information, not tuned.
+The expression and the images of the test spots are not used to choose genes, to fit the scaling,
+to pick the number of epochs or to set a hyperparameter. The genes are the 1,000 most variable
+ones of the training spots, plus the breast cancer markers (ten are listed in `experiment.py`)
+that the selection did not pick and that every slide has, the test slide included. That last
+condition reads the names of the genes of the test slide, not their expression, so the list of
+markers depends on which patient is held out; compared with a check on the training slides alone
+it can only remove a marker, never add one. A HER2ST run uses 1,005 to 1,007 genes. The scaling
+is the training mean and standard deviation, and the epochs come from the loss on a strip at the
+edge of the training slide with two spot pitches left out around it. The other settings are the
+defaults of `histoalign run`; the variants in the tables are reported for information, not tuned.
 
 Three splits:
 
