@@ -46,7 +46,9 @@ baselines have no seed and give the same score every time.
 |  | control: aligned space, shuffled pairs | -0.013 ± 0.007 | -0.035 ± 0.007 | -0.008 ± 0.016 |
 
 Retrieval: for each test image, the rank of its own spot among all test spots by similarity in the
-aligned space. In brackets, what a random ranking gives.
+aligned space. In brackets, what one random ranking gives: a random similarity matrix drawn with
+seed 0. The expected recall@10 of a random ranking is 10 divided by the number of test spots,
+0.013, 0.0025 and 0.0026 for the three splits.
 
 | split | recall@10 | near recall@10 | median rank |
 |---|---|---|---|
@@ -87,7 +89,8 @@ each patient counting once (the mean of its three seeds).
 | control: aligned space, shuffled pairs | 0.003 ± 0.005 | 0.001 ± 0.005 | 0.011 ± 0.027 |
 
 Each patient on its own, over all genes, and the retrieval recall@10 of the aligned space (in
-brackets, what a random ranking gives). The files in `results/her2st/` hold the spread over seeds.
+brackets, what one random ranking gives: a random similarity matrix drawn with seed 0, stored as
+`chance` in the result files). The files in `results/her2st/` hold the spread over seeds.
 
 | patient | test spots | aligned space, kNN | raw features, kNN | raw features, ridge | control | recall@10 |
 |---|---|---|---|---|---|---|
@@ -100,6 +103,23 @@ brackets, what a random ranking gives). The files in `results/her2st/` hold the 
 | G | 1,371 | 0.067 | 0.060 | 0.076 | -0.004 | 0.052 (0.007) |
 | H | 1,726 | 0.061 | 0.054 | 0.071 | 0.009 | 0.034 (0.003) |
 
+The expected recall@10 of a random ranking is 10 divided by the number of test spots: the right
+spot is equally likely to sit at any position. The brackets above are one draw around that value,
+so the retrieval is compared with both here (mean of the three seeds; the ratios are computed
+from the unrounded values in `results/her2st/*.json`, fields `retrieval.image_to_expr`,
+`retrieval.chance` and `test.spots`).
+
+| patient | test spots | recall@10 | expected by chance, 10 / test spots | times the expected | random draw, seed 0 | times the draw |
+|---|---|---|---|---|---|---|
+| A | 2,065 | 0.0136 | 0.0048 | 2.80 | 0.0048 | 2.80 |
+| B | 1,712 | 0.0294 | 0.0058 | 5.03 | 0.0041 | 7.19 |
+| C | 1,086 | 0.0411 | 0.0092 | 4.47 | 0.0120 | 3.44 |
+| D | 1,833 | 0.0255 | 0.0055 | 4.67 | 0.0049 | 5.19 |
+| E | 1,729 | 0.0120 | 0.0058 | 2.07 | 0.0064 | 1.88 |
+| F | 2,098 | 0.0178 | 0.0048 | 3.73 | 0.0062 | 2.87 |
+| G | 1,371 | 0.0515 | 0.0073 | 7.07 | 0.0066 | 7.85 |
+| H | 1,726 | 0.0338 | 0.0058 | 5.83 | 0.0035 | 9.72 |
+
 What the numbers say:
 
 - The control sits at zero: 0.003, 0.001 and 0.011 on the three scores.
@@ -109,7 +129,9 @@ What the numbers say:
 - A ridge regression on the raw features does better than the aligned space for 7 of 8 patients over
   all genes (+0.008 on average) and for 8 of 8 on the 50 most variable genes.
 - The shared space is not empty. For every patient the right spot is among the ten closest more
-  often than a random ranking would put it, 1.9 to 9.7 times as often.
+  often than a random ranking would put it: 2.1 to 7.1 times as often as the expected 10 divided
+  by the number of test spots, and 1.9 to 9.7 times as often as the one random draw of the
+  brackets (last table above).
 - The scores are low, 0.06 on average over all genes, and not comparable with the Visium numbers
   above: other arrays, another resolution, and a patient the model has never seen.
 
