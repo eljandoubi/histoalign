@@ -1,5 +1,10 @@
-"""Gene selection and scaling. Everything learned from data (the gene list, the mean and spread of
-each gene) comes from the training slides only, never from the slide that is evaluated."""
+"""Gene selection and scaling.
+
+The most variable genes and the mean and spread of each gene are computed from the training
+spots. `experiment.run` then adds the breast cancer markers that every slide has, the test slide
+included: that reads the names of the genes of the test slide, never their expression, so the
+markers can depend on the held out patient.
+"""
 
 import anndata as ad
 import numpy as np

@@ -104,11 +104,10 @@ def run(
 ) -> dict:
     """Fit on `train_sets`, score on `test_set`.
 
-    The gene list and the scaling come from the training spots only. A strip of `val_frac` of
-    each training slide, with `val_gap` spot pitches around it left out, is held back to pick
-    the number of epochs; the test spots are never used for a choice. Besides the aligned model
-    the result holds three reference points on the same split: kNN on the raw image features,
-    ridge regression on them, and the aligned model trained on shuffled pairs.
+    The genes are the most variable ones of the training spots plus the `markers` that every slide
+    has, the test slide included: that reads the names of its genes, never their expression, so the
+    markers can depend on the held out patient. The scaling is fitted on the training spots. The
+    expression and the images of the test spots are not used to choose genes, scaling or epochs.
     """
     t0 = time.time()
     test_p, test_idx = test_set
