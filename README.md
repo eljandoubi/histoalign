@@ -78,8 +78,8 @@ What the numbers say:
 
 The two Visium sections above are neighbours in one block, the easy case. On HER2ST each of the 8
 patients is held out in turn: the model is trained on the sections of the seven others and scored on
-all the sections of that patient, three seeds each. Mean and standard deviation over the 8 patients,
-each patient counting once (the mean of its three seeds).
+all the sections of that patient, three seeds each. Mean and population standard deviation
+(divisor 8) over the 8 patients, each patient counting once (the mean of its three seeds).
 
 | method | all genes | top 50 genes | per spot |
 |---|---|---|---|
@@ -125,7 +125,7 @@ What the numbers say:
 - The control sits at zero: 0.003, 0.001 and 0.011 on the three scores.
 - The aligned space does better than a kNN on the raw features for 7 of 8 patients over all genes
   (+0.006 on average), for 6 of 8 on the 50 most variable genes and for 7 of 8 per spot. The gain is
-  small next to the spread between patients (0.030).
+  small next to the standard deviation between patients (0.030, population convention).
 - A ridge regression on the raw features does better than the aligned space for 7 of 8 patients over
   all genes (+0.008 on average) and for 8 of 8 on the 50 most variable genes.
 - The shared space is not empty. For every patient the right spot is among the ten closest more
@@ -232,8 +232,8 @@ candidates within 1.5 spot pitches of the right one.
   the images 0.7 to 1.0 microns per pixel, so the patch is about 110 to 160 pixels wide before it
   is enlarged to 224.
 - In the Visium tables the standard deviations are over seeds (three per variant), not over
-  sections. In the HER2ST table they are over the 8 patients, each patient being the mean of three
-  seeds.
+  sections. In the HER2ST table they are population standard deviations (divisor 8) over the 8
+  patients, each patient being the mean of three seeds.
 - The mean correlation over a thousand genes is dominated by genes with little signal; the
   files in `results/` hold the score of each marker.
 
